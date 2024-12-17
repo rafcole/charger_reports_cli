@@ -96,6 +96,14 @@ class Station:
         self.last_report_timestamp = None
         self.charger_up_reports = [] # feels bad, not sure station should know about it
 
+    @classmethod
+    def get(cls, station_id):
+        #todo - validate stationID
+        if station_id not in __class__.instances:
+            sys.exit(f'Error: Station "{station_id}" not found')
+
+        return __class__.instances[station_id]
+
 
     @property
     def id(self):
@@ -242,7 +250,20 @@ def populate_charger_reports(report_data):
         associated_station.add_report(new_report)
         print(new_report)
 
+def summarize_uptime():
+    sorted_station_ids = sorted(Station.instances.keys())
+    print(sorted_station_ids)
 
+    for station_id in sorted_station_ids:
+        print(Station.get(station_id))
+    """
+    Get station keys
+    Sort ascending
+
+    Iterate over keys/stations
+      Calculate up time HELPER TODO
+      Print to screen
+    """
 
 
 
@@ -254,6 +275,7 @@ station_data, charger_report_data = extract_data(file_path)
 populate_stations(station_data)
 populate_charger_reports(charger_report_data)
 pprint.pprint(Station.instances)
+summarize_uptime()
 
 
 # def ingest_report(file_path):
