@@ -61,10 +61,10 @@ class AvailabilityReport:
 
 class Station:
 
-    stations = {}
+    instances = {}
 
     def __init__(self, id):
-        if id in self.__class__.stations:
+        if id in self.__class__.instances:
             raise sys.exit(f'Error: Duplicate station ID "{id}" detected, please check inputs')
 
         self.id = id
@@ -72,7 +72,7 @@ class Station:
         self.first_report_timestamp = None
         self.last_report_timestamp = None
         self.charger_up_reports = [] # feels bad, not sure station should know about it
-        self.__class__.stations[id] = self
+        self.__class__.instances[id] = self
 
     @property
     def id(self):
@@ -189,7 +189,7 @@ def ingest_report(file_path):
               line_data = line.split()
               station_id = line_data[0]
               current_station = Station(station_id)
-              all_stations[station_id] = current_station
+              all_stations[station_id] = current_station #now duplicative of Station.instances
 
               charger_ids = line_data[1:]
 
@@ -220,7 +220,7 @@ def ingest_report(file_path):
               # print(f"Station ID: {station_id}, Chargers: {charger_ids}")
 
   return {
-      'stations': all_stations,
+      'stations': Station.instances,
       'chargers': all_chargers
       }
 
