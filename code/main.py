@@ -52,14 +52,14 @@ class AvailabilityReport:
 
   instances = {}
 
-  def __init__(self, charger_id, start, stop, up):
+  def __init__(self, charger_id, start_time, stop_time, up):
 
     self.charger_id = charger_id
-    self.start_time = start
-    self.stop_time = stop
+    self.start_time = start_time
+    self.stop_time = stop_time
     self.up = up
 
-    self.id = (charger_id, start)
+    self.id = (charger_id, start_time)
 
   def duration(self):
       return self.stop_time - self.start_time
@@ -112,6 +112,9 @@ class Station:
 
         return __class__.instances[station_id]
 
+    @classmethod
+    def get_all(cls):
+        return __class__.instances
 
     @property
     def id(self):
@@ -119,7 +122,6 @@ class Station:
     @id.setter
     def id(self, id):
       self._id = id
-
 
     @property
     def chargers(self):
@@ -129,12 +131,6 @@ class Station:
     def chargers(self, data):
         self._chargers = data
 
-    @property
-    def first_report_timestamp(self):
-        return self._first_report_timestamp
-    @first_report_timestamp.setter
-    def first_report_timestamp(self, nano):
-        self._first_report_timestamp = nano
 
     def add_report(self, report):
         if self.first_report_timestamp is None or report.start_time < self.first_report_timestamp:
@@ -146,6 +142,12 @@ class Station:
             self.charger_up_reports.append(report)
 
 
+    @property
+    def first_report_timestamp(self):
+        return self._first_report_timestamp
+    @first_report_timestamp.setter
+    def first_report_timestamp(self, nano):
+        self._first_report_timestamp = nano
 
     @property
     def last_report_timestamp(self):
@@ -167,10 +169,6 @@ class Station:
 
     def __repr__(self):
         return self.__str__()
-
-
-    # def print(self):
-    #     print(f'Station: {self.id}   Chargers: {self.chargers}')
 
 
 class Report:
@@ -250,20 +248,55 @@ def populate_stations(station_data):
 
 def populate_charger_reports(report_data):
     for line in report_data:
-        print(line)
         charger_id, start_time, end_time, up = line
 
         new_report = AvailabilityReport(charger_id, start_time, end_time, up)
         associated_station = Station.get(Charger.get(charger_id).station_id) # should be class method for accessing Station and Charger instances
         associated_station.add_report(new_report)
-        print(new_report)
 
-def summarize_uptime():
-    sorted_station_ids = sorted(Station.instances.keys())
-    print(sorted_station_ids)
+
+def summarize_uptime(): # feels off to do this on all stations
+    sorted_station_ids = sorted(Station.get_all().keys())
 
     for station_id in sorted_station_ids:
+        current_station = Station.get(station_id)
         print(Station.get(station_id))
+        # how we get the charger_up reports is debateable
+
+        up_time_reports = current_station.charger_up_reports
+
+        sorted_report = sorted(up_time_reports, key=lambda p: p.start_time)
+        # print(sorted_report)
+        print('merge_uptime output : ', merge_uptime(sorted_report))
+
+def merge_uptime(reports_list):
+    if not reports_list:
+        return 0, []
+
+    merged = []
+    up_time_total = 0
+    down_time_total = 0
+
+    merged_start, merged_end = reports_list[0].start_time, reports_list[0].stop_time
+
+    for report in reports_list[1:]:
+        current_start = report.start_time
+        current_end = report.stop_time
+
+        if current_start > merged_end:  # Gap detected
+            down_time_total += current_end - merged_end
+            merged.append((merged_start, merged_end))
+            up_time_total += merged_end - merged_start
+            merged_start, merged_end = current_start, current_end
+        else:  # Merge overlapping/adjacent ranges
+            merged_end = max(merged_end, current_end)
+
+    # Add the last range
+    merged.append((merged_start, merged_end))
+    up_time_total += merged_end - merged_start
+
+    return up_time_total, down_time_total
+
     """
     Get station keys
     Sort ascending
@@ -278,11 +311,9 @@ def summarize_uptime():
 
 station_data, charger_report_data = extract_data(file_path)
 
-# print(station_data)
-# print(charger_report_data)
+
 populate_stations(station_data)
 populate_charger_reports(charger_report_data)
-pprint.pprint(Station.instances)
 summarize_uptime()
 
 
@@ -319,13 +350,10 @@ summarize_uptime()
 #                   # all_chargers[id] = new_charger
 #                   current_station.add_charger(new_charger)
 
-#                   # print(new_charger)
 #           # parse reports
 #           else:
-#               # print(line)
 #               report_entities = line.split()
 #               charger_id = report_entities[0]
-#               # print(type(charger_id))
 #               start_time = report_entities[1]
 #               stop_time = report_entities[2]
 #               up = report_entities[3]
@@ -354,11 +382,6 @@ summarize_uptime()
 
 # report_data = ingest_report(file_path)
 
-# pprint.pprint(report_data)
-
-# for station_key in report_data['stations']:
-#     print(station_key)
-#     # print(type(station))
 
 """
 
