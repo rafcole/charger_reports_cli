@@ -7,12 +7,20 @@ class Charger:
 
     def __init__(self, id, station_id):
         if id in self.__class__.instances:
-          raise sys.exit(f'Error: Duplicate charger ID "{id}" detected, please check inputs')
+          raise sys.exit(f'Error: A charger with the ID "{id}" already exists')
         self.__class__.instances[id] = self
 
         self.id = id
         self.station_id = station_id
         self.availabilityReports = []
+
+    @classmethod
+    def get(cls, charger_id):
+    #todo - validate stationID
+      if charger_id not in __class__.instances:
+          sys.exit(f'Error: Charger "{charger_id}" not found')
+
+      return __class__.instances[charger_id]
 
     @property
     def id(self):
@@ -246,7 +254,7 @@ def populate_charger_reports(report_data):
         charger_id, start_time, end_time, up = line
 
         new_report = AvailabilityReport(charger_id, start_time, end_time, up)
-        associated_station = Station.instances[Charger.instances[charger_id].station_id] # should be class method for accessing Station and Charger instances
+        associated_station = Station.get(Charger.get(charger_id).station_id) # should be class method for accessing Station and Charger instances
         associated_station.add_report(new_report)
         print(new_report)
 
