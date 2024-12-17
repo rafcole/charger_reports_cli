@@ -169,6 +169,56 @@ allChargers = {}
 
 file_path = '../coding-challenge-charger-uptime-main/input_1.txt'
 
+def extract_data(file_path):
+    stations = []
+    charger_availability = []
+
+    # Read the file
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    # Track current section
+    current_section = None
+
+    # Process each line
+    for line in lines:
+        line = line.strip()
+
+        if len(line) == 0:
+            continue
+
+        if line.startswith("[") and line.endswith("]"):
+            current_section = line.strip("[]")
+            continue
+
+        if current_section == "Stations":
+            # Parse stations section
+            parts = line.split()
+            station_id = int(parts[0])
+            connected_stations = tuple(map(int, parts[1:]))
+            stations.append((station_id, *connected_stations))
+
+        elif current_section == "Charger Availability Reports":
+            # Parse charger availability reports section
+            parts = line.split()
+            station_id = int(parts[0])
+            start = int(parts[1])
+            end = int(parts[2])
+            available = parts[3].lower() == 'true'
+            charger_availability.append((station_id, start, end, available))
+    return stations, charger_availability
+
+
+def populate_stations(station_data):
+  for line in station_data:
+      print(line)
+
+station_data, charger_report_data = extract_data(file_path)
+
+# print(station_data)
+# print(charger_report_data)
+populate_stations(station_data)
+
 def ingest_report(file_path):
   in_stations_section = False
   in_charger_reports = False
@@ -229,20 +279,24 @@ def ingest_report(file_path):
 # Cumulative up time reports are organized at the station level
 # now we need to mimic some kind of join table functionality
 
+
 # Tracking the first/last charger time stamps of a station adds O(n)
 # The avaliablity reports can be lightly parsed to see if the new time stamps exceed the start and end times
 # For the sake of this report we only need to track up time, so down time can be used to check against station
 # start and end times but does not need to be included in amongst up time reports.
 
-report_data = ingest_report(file_path)
+# report_data = ingest_report(file_path)
 
-pprint.pprint(report_data)
+# pprint.pprint(report_data)
 
-for station_key in report_data['stations']:
-    print(station_key)
-    # print(type(station))
+# for station_key in report_data['stations']:
+#     print(station_key)
+#     # print(type(station))
 
 """
+
+
+
 given an input file
 
 Create a report object
