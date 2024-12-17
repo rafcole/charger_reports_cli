@@ -1,5 +1,6 @@
 import re
 import pprint
+import sys
 
 class Charger:
     def __init__(self, id, station_id):
@@ -58,14 +59,20 @@ class AvailabilityReport:
       return self.__str__()
 
 
-
 class Station:
+
+    stations = {}
+
     def __init__(self, id):
+        if id in self.__class__.stations:
+            raise sys.exit(f'Error: Duplicate station ID "{id}" detected, please check inputs')
+
         self.id = id
         self.chargers = {}
         self.first_report_timestamp = None
         self.last_report_timestamp = None
-        self.charger_up_reports = []
+        self.charger_up_reports = [] # feels bad, not sure station should know about it
+        self.__class__.stations[id] = self
 
     @property
     def id(self):
@@ -177,6 +184,7 @@ def ingest_report(file_path):
               continue
 
           # Create station, add chargers
+          # TODO - allow duplicative charger entries
           if in_stations_section and line:
               line_data = line.split()
               station_id = line_data[0]
@@ -191,6 +199,7 @@ def ingest_report(file_path):
                   current_station.add_charger(new_charger)
 
                   # print(new_charger)
+          # parse reports
           else:
               # print(line)
               report_entities = line.split()
@@ -229,9 +238,10 @@ report_data = ingest_report(file_path)
 
 pprint.pprint(report_data)
 
-for station in report_data['stations']:
-    print(station)
-    print(station.reports)
+for station_key in report_data['stations']:
+    print(station_key)
+    # print(type(station))
+
 """
 given an input file
 
