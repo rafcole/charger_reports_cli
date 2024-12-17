@@ -70,6 +70,8 @@ class Station:
     instances = {}
 
     def __init__(self, id):
+        #TODO - validate ID against prompt
+
         if id in self.__class__.instances:
             raise sys.exit(f'Error: Duplicate station ID "{id}" detected, please check inputs')
         self.__class__.instances[id] = self
@@ -212,67 +214,80 @@ def extract_data(file_path):
 def populate_stations(station_data):
   for line in station_data:
       print(line)
+      station_id = line[0]
+      chargers = line[1:] # TODO test against stations with no assigned chargers
+
+      new_station = Station(station_id)
+
+      # check for station uniqueness
+      # redundant with erroring in station initialization
+      for charger_id in chargers:
+          new_charger = Charger(charger_id, new_station.id)
+          new_station.add_charger(new_charger)
+
+
 
 station_data, charger_report_data = extract_data(file_path)
 
 # print(station_data)
 # print(charger_report_data)
 populate_stations(station_data)
+pprint.pprint(Station.instances)
 
-def ingest_report(file_path):
-  in_stations_section = False
-  in_charger_reports = False
+# def ingest_report(file_path):
+#   in_stations_section = False
+#   in_charger_reports = False
 
-  with open(file_path, 'r') as file:
-      for line in file:
-          line = line.strip()
+#   with open(file_path, 'r') as file:
+#       for line in file:
+#           line = line.strip()
 
-          # Check for section headers
-          if line == "[Stations]":
-              in_stations_section = True
-              continue
-          elif line == "[Charger Availability Reports]":
-              continue
-          elif len(line) == 0:
-              in_stations_section = False
-              continue
+#           # Check for section headers
+#           if line == "[Stations]":
+#               in_stations_section = True
+#               continue
+#           elif line == "[Charger Availability Reports]":
+#               continue
+#           elif len(line) == 0:
+#               in_stations_section = False
+#               continue
 
-          # Create station, add chargers
-          # TODO - allow duplicative charger entries
-          if in_stations_section and line:
-              line_data = line.split()
-              station_id = line_data[0]
-              current_station = Station(station_id)
-              #all_stations[station_id] = current_station #now duplicative of Station.instances
+#           # Create station, add chargers
+#           # TODO - allow duplicative charger entries
+#           if in_stations_section and line:
+#               line_data = line.split()
+#               station_id = line_data[0]
+#               current_station = Station(station_id)
+#               #all_stations[station_id] = current_station #now duplicative of Station.instances
 
-              charger_ids = line_data[1:]
+#               charger_ids = line_data[1:]
 
-              for id in charger_ids:
-                  new_charger = Charger(id, station_id)
-                  # all_chargers[id] = new_charger
-                  current_station.add_charger(new_charger)
+#               for id in charger_ids:
+#                   new_charger = Charger(id, station_id)
+#                   # all_chargers[id] = new_charger
+#                   current_station.add_charger(new_charger)
 
-                  # print(new_charger)
-          # parse reports
-          else:
-              # print(line)
-              report_entities = line.split()
-              charger_id = report_entities[0]
-              # print(type(charger_id))
-              start_time = report_entities[1]
-              stop_time = report_entities[2]
-              up = report_entities[3]
+#                   # print(new_charger)
+#           # parse reports
+#           else:
+#               # print(line)
+#               report_entities = line.split()
+#               charger_id = report_entities[0]
+#               # print(type(charger_id))
+#               start_time = report_entities[1]
+#               stop_time = report_entities[2]
+#               up = report_entities[3]
 
-              report = AvailabilityReport(charger_id, start_time, stop_time, up)
+#               report = AvailabilityReport(charger_id, start_time, stop_time, up)
 
-              parent_station = Station.instances[Charger.instances[charger_id].station_id]
-              parent_station.add_report(report)
+#               parent_station = Station.instances[Charger.instances[charger_id].station_id]
+#               parent_station.add_report(report)
 
 
-  return {
-      'stations': Station.instances,
-      'chargers': Charger.instances
-      }
+#   return {
+#       'stations': Station.instances,
+#       'chargers': Charger.instances
+#       }
 
 # disjuncture in that report come in at the charger level (perhaps each charger has it's own 5g system)
 # but the station data is not associated
