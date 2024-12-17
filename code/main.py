@@ -3,7 +3,13 @@ import pprint
 import sys
 
 class Charger:
+    instances = {}
+
     def __init__(self, id, station_id):
+        if id in self.__class__.instances:
+          raise sys.exit(f'Error: Duplicate charger ID "{id}" detected, please check inputs')
+        self.__class__.instances[id] = self
+
         self.id = id
         self.station_id = station_id
         self.availabilityReports = []
@@ -66,13 +72,14 @@ class Station:
     def __init__(self, id):
         if id in self.__class__.instances:
             raise sys.exit(f'Error: Duplicate station ID "{id}" detected, please check inputs')
+        self.__class__.instances[id] = self
 
         self.id = id
         self.chargers = {}
         self.first_report_timestamp = None
         self.last_report_timestamp = None
         self.charger_up_reports = [] # feels bad, not sure station should know about it
-        self.__class__.instances[id] = self
+
 
     @property
     def id(self):
@@ -166,9 +173,6 @@ def ingest_report(file_path):
   in_stations_section = False
   in_charger_reports = False
 
-  all_stations = {}
-  all_chargers = {}
-
   with open(file_path, 'r') as file:
       for line in file:
           line = line.strip()
@@ -189,13 +193,13 @@ def ingest_report(file_path):
               line_data = line.split()
               station_id = line_data[0]
               current_station = Station(station_id)
-              all_stations[station_id] = current_station #now duplicative of Station.instances
+              #all_stations[station_id] = current_station #now duplicative of Station.instances
 
               charger_ids = line_data[1:]
 
               for id in charger_ids:
                   new_charger = Charger(id, station_id)
-                  all_chargers[id] = new_charger
+                  # all_chargers[id] = new_charger
                   current_station.add_charger(new_charger)
 
                   # print(new_charger)
@@ -211,17 +215,13 @@ def ingest_report(file_path):
 
               report = AvailabilityReport(charger_id, start_time, stop_time, up)
 
-              parent_station = all_stations[all_chargers[charger_id].station_id]
+              parent_station = Station.instances[Charger.instances[charger_id].station_id]
               parent_station.add_report(report)
 
-              # all_chargers[charger_id].add_report(report)
-
-              # print(current_station)
-              # print(f"Station ID: {station_id}, Chargers: {charger_ids}")
 
   return {
       'stations': Station.instances,
-      'chargers': all_chargers
+      'chargers': Charger.instances
       }
 
 # disjuncture in that report come in at the charger level (perhaps each charger has it's own 5g system)
