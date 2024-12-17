@@ -41,11 +41,17 @@ class Charger:
 
 
 class AvailabilityReport:
+
+  instances = {}
+
   def __init__(self, charger_id, start, stop, up):
+
     self.charger_id = charger_id
     self.start_time = start
     self.stop_time = stop
     self.up = up
+
+    self.id = (charger_id, start)
 
   def duration(self):
       return self.stop_time - self.start_time
@@ -57,6 +63,14 @@ class AvailabilityReport:
   @charger_id.setter
   def charger_id(self, charger_id):
       self._charger_id = charger_id
+
+  @property
+  def id(self):
+      return self._id
+
+  @id.setter
+  def id(self, args):
+      self._id = f"{args[0]}{args[1]}"
 
   def __str__(self):
       return f'Report: Charger: {self.charger_id}, Start: {self.start_time}, Stop: {self.stop_time}, Up: {self.up}\n'
@@ -133,7 +147,7 @@ class Station:
 
     def __str__(self):
         charger_ids = list(self.chargers.keys())
-        return f'Station ID: {self.id}\n\t\t\t\t Chargers: {charger_ids}'
+        return f'Station ID: {self.id}\n\t\t\t\t Chargers: {charger_ids}\n\t\t\t\t\tFirst timestamp: {self.first_report_timestamp}\t\t Last timestamp:{self.last_report_timestamp}\n'
 
     def __repr__(self):
         return self.__str__()
@@ -160,12 +174,6 @@ class Report:
         self.stations[station_id] = Station(station_id)
 
         return self._stations[station_id]
-
-read_data = ''
-
-
-allStations = {}
-allChargers = {}
 
 #TODO - filepath is cli arg
 
@@ -213,7 +221,6 @@ def extract_data(file_path):
 
 def populate_stations(station_data):
   for line in station_data:
-      print(line)
       station_id = line[0]
       chargers = line[1:] # TODO test against stations with no assigned chargers
 
@@ -225,6 +232,19 @@ def populate_stations(station_data):
           new_charger = Charger(charger_id, new_station.id)
           new_station.add_charger(new_charger)
 
+def populate_charger_reports(report_data):
+    for line in report_data:
+        print(line)
+        charger_id, start_time, end_time, up = line
+
+        new_report = AvailabilityReport(charger_id, start_time, end_time, up)
+        associated_station = Station.instances[Charger.instances[charger_id].station_id] # should be class method for accessing Station and Charger instances
+        associated_station.add_report(new_report)
+        print(new_report)
+
+
+
+
 
 
 station_data, charger_report_data = extract_data(file_path)
@@ -232,7 +252,9 @@ station_data, charger_report_data = extract_data(file_path)
 # print(station_data)
 # print(charger_report_data)
 populate_stations(station_data)
+populate_charger_reports(charger_report_data)
 pprint.pprint(Station.instances)
+
 
 # def ingest_report(file_path):
 #   in_stations_section = False
