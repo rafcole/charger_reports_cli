@@ -1,6 +1,7 @@
 import sys
 import math
 import os
+import bisect
 
 
 class ValidationUtils:
@@ -22,7 +23,7 @@ class ValidationUtils:
             return True
 
         if type(value) is str:
-            return {"True", "true", "TRUE", "False", "false", "FALSE"}.includes(input)
+            return value in {"True", "true", "TRUE", "False", "false", "FALSE"}
         # todo
         return False
 
@@ -46,6 +47,16 @@ class Charger:
 
         self.first_report_timestamp = None
         self.last_report_timestamp = None
+
+        self.total_reported_time = 0
+
+    @property
+    def total_reported_time(self):
+        return self._total_reported_time
+
+    @total_reported_time.setter
+    def total_reported_time(self, total_reported_time):
+        self._total_reported_time = total_reported_time
 
     @classmethod
     def is_valid_id(cls, id):
@@ -104,9 +115,34 @@ class Charger:
     def availability_reports(self, data):
         self._availability_reports = data
 
+    def insert_report(self, report):
+        # keep sorted order, will be necessary for checking for collisions
+        index = bisect.bisect_left(self.availability_reports, report)
+
+        if (
+            # check neighboring reports for overlap
+            (
+                index > 0
+                and self.availability_reports[index - 1].stop_time > report.start_time
+            )
+            or (
+                index < len(self.availability_reports)
+                and self.availability_reports[index].start_time < report.stop_time
+            )
+        ):
+            sys.exit(
+                f"ERROR: Report collision detected for charger {self.id}. "
+                f"New report [{report.start_time}, {report.stop_time}] conflicts with an existing report at the same charger"
+            )
+
+        self.availability_reports.insert(index, report)
+
     def add_report(self, start_time, end_time, up):
         report = AvailabilityReport(self.id, start_time, end_time, up)
 
+        self.insert_report(report)
+
+        # update min/max timestamps
         if (
             self.first_report_timestamp is None
             or report.start_time < self.first_report_timestamp
@@ -118,7 +154,15 @@ class Charger:
         ):
             self.last_report_timestamp = report.stop_time
 
-        self.availability_reports.append(report)
+        self.total_reported_time += end_time - start_time
+
+        if (
+            self.total_reported_time
+            > self.last_report_timestamp - self.first_report_timestamp
+        ):
+            raise sys.exit(
+                f"ERROR: Cumulative Avaliability Report duration for charger {self.id} exceeds 100% of reporting time period"
+            )
 
     def reports_by_status(self, available_bool):
         return [
@@ -151,14 +195,18 @@ class AvailabilityReport:
 
         if not ValidationUtils.is_usable_as_bool(up):
             raise sys.exit(
-                "ERROR: invalid input for Availability Report status boolean"
+                f'ERROR: invalid input for Availability Report status boolean - "{up}"'
             )
-        # up
+
+        if start_time > stop_time:
+            raise sys.exit(
+                "ERROR: negative reporting duration found in Availability Reports"
+            )
 
         self.charger_id = charger_id
         self.start_time = start_time
         self.stop_time = stop_time
-        self.up = up
+        self.up = up in {"True", "true", "TRUE"}
 
         self.id = (charger_id, start_time)
 
@@ -309,7 +357,7 @@ class Report:
                 station_id = parts[0]
                 start = parts[1]
                 end = parts[2]
-                available = parts[3].lower() == "true"
+                available = parts[3]  # .lower() == "true"
                 charger_availability.append((station_id, start, end, available))
         return stations, charger_availability
 
@@ -399,9 +447,13 @@ class Report:
                 station_reports.extend(charger.reports_by_status(available_bool=True))
 
             up_time, down_time = cls.calculate_uptime(station_reports)
+
             total_reporting_duration = last_time_stamp - first_time_stamp
 
-            up_time_to_total_time = up_time / total_reporting_duration
+            up_time_to_total_time = 0
+
+            if total_reporting_duration > 0:
+                up_time_to_total_time = up_time / total_reporting_duration
 
             report_data.append((station_id, up_time_to_total_time))
         return report_data
