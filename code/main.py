@@ -5,27 +5,19 @@ import os
 
 class ValidationUtils:
     @classmethod
-    def is_usable_as_unsigned_32_bit_int(cls, value):
+    def is_usable_as_unsigned_int(cls, value, num_bits):
         if type(value) is str:
             if not value.isdigit():
                 return False
             value = int(value)
 
         if type(value) is int:
-            return 0 <= value <= 2**32 - 1
+            return 0 <= value <= 2**num_bits - 1
 
         return False
 
     @classmethod
-    def is_unsigned_64_bit_integer_as_str(cls, value):
-        if value.isdigit():
-            num = int(value)
-            if 0 <= num <= 2**64 - 1:
-                return True
-        return False
-
-    @classmethod
-    def is_bool(cls, value):
+    def is_usable_as_bool(cls, value):
         if type(value) is bool:
             return True
 
@@ -57,10 +49,11 @@ class Charger:
 
     @classmethod
     def is_valid_id(cls, id):
-        return ValidationUtils.is_usable_as_unsigned_32_bit_int(id)
+        return ValidationUtils.is_usable_as_unsigned_int(id, num_bits=64)
 
     @classmethod
     def get(cls, charger_id):
+        charger_id = int(charger_id)
         # todo - validate stationID
         if charger_id not in cls.instances:
             raise Exception(f'Error: Charger "{charger_id}" not found')
@@ -148,12 +141,30 @@ class AvailabilityReport:
     instances = {}
 
     def __init__(self, charger_id, start_time, stop_time, up):
+        # start_time
+        if not __class__.is_valid_time_input(
+            start_time
+        ) and __class__.is_valid_time_input(stop_time):
+            raise sys.exit(
+                f'ERROR: invalid time stamp - either "{start_time}" or "{stop_time}"'
+            )
+
+        if not ValidationUtils.is_usable_as_bool(up):
+            raise sys.exit(
+                "ERROR: invalid input for Availability Report status boolean"
+            )
+        # up
+
         self.charger_id = charger_id
         self.start_time = start_time
         self.stop_time = stop_time
         self.up = up
 
         self.id = (charger_id, start_time)
+
+    @classmethod
+    def is_valid_time_input(cls, val):
+        return ValidationUtils.is_usable_as_unsigned_int(val, num_bits=64)
 
     def duration(self):
         return self.stop_time - self.start_time
@@ -207,7 +218,7 @@ class Station:
 
     @classmethod
     def is_valid_id(cls, value):
-        return ValidationUtils.is_usable_as_unsigned_32_bit_int(value)
+        return ValidationUtils.is_usable_as_unsigned_int(value, num_bits=32)
 
     @classmethod
     def get(cls, station_id):
@@ -290,24 +301,26 @@ class Report:
 
             elif current_section == "Charger Availability Reports":
                 parts = line.split()
-                station_id = int(parts[0])
-                start = int(parts[1])
-                end = int(parts[2])
+
+                if len(parts) != 4:
+                    print(f"ERROR: Invalid Availablity Report inputs - {parts}")
+                    sys.exit(1)
+
+                station_id = parts[0]
+                start = parts[1]
+                end = parts[2]
                 available = parts[3].lower() == "true"
                 charger_availability.append((station_id, start, end, available))
         return stations, charger_availability
 
     @classmethod
     def populate_stations(cls, station_data):
-        print(station_data)
         for line in station_data:
             station_id = line[0]
-            chargers = line[1:]  # TODO test against stations with no assigned chargers
+            chargers = line[1:]
 
             new_station = Station(station_id)
 
-            # check for station uniqueness
-            # redundant with erroring in station initialization
             for charger_id in chargers:
                 new_charger = Charger(charger_id, new_station.id)
                 new_station.add_charger(new_charger)
@@ -319,6 +332,17 @@ class Report:
     def populate_charger_reports(cls, report_data):
         for line in report_data:
             charger_id, start_time, end_time, up = line
+
+            if not AvailabilityReport.is_valid_time_input(
+                start_time
+            ) or not AvailabilityReport.is_valid_time_input(end_time):
+                raise sys.exit(
+                    f'ERROR: invalid time stamp - either "{start_time}" or "{end_time}"'
+                )
+
+            start_time = int(start_time)
+            end_time = int(end_time)
+
             charger = None
             try:
                 charger = Charger.get(charger_id)
