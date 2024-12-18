@@ -1,15 +1,14 @@
-import re
-import pprint
 import sys
 import math
 import os
+
 
 class Charger:
     instances = {}
 
     def __init__(self, id, station_id):
         if id in self.__class__.instances:
-          raise sys.exit(f'Error: A charger with the ID "{id}" already exists')
+            raise sys.exit(f'Error: A charger with the ID "{id}" already exists')
         self.__class__.instances[id] = self
 
         self.id = id
@@ -21,11 +20,11 @@ class Charger:
 
     @classmethod
     def get(cls, charger_id):
-    #todo - validate stationID
-      if charger_id not in __class__.instances:
-          sys.exit(f'Error: Charger "{charger_id}" not found')
+        # todo - validate stationID
+        if charger_id not in __class__.instances:
+            sys.exit(f'Error: Charger "{charger_id}" not found')
 
-      return __class__.instances[charger_id]
+        return __class__.instances[charger_id]
 
     @property
     def id(self):
@@ -46,6 +45,7 @@ class Charger:
     @property
     def first_report_timestamp(self):
         return self._first_report_timestamp
+
     @first_report_timestamp.setter
     def first_report_timestamp(self, nano):
         self._first_report_timestamp = nano
@@ -53,6 +53,7 @@ class Charger:
     @property
     def last_report_timestamp(self):
         return self._last_report_timestamp
+
     @last_report_timestamp.setter
     def last_report_timestamp(self, nano):
         self._last_report_timestamp = nano
@@ -72,74 +73,86 @@ class Charger:
     def add_report(self, start_time, end_time, up):
         report = AvailabilityReport(self.id, start_time, end_time, up)
 
-        if self.first_report_timestamp is None or report.start_time < self.first_report_timestamp:
+        if (
+            self.first_report_timestamp is None
+            or report.start_time < self.first_report_timestamp
+        ):
             self.first_report_timestamp = report.start_time
-        if self.last_report_timestamp is None or report.stop_time > self.last_report_timestamp:
+        if (
+            self.last_report_timestamp is None
+            or report.stop_time > self.last_report_timestamp
+        ):
             self.last_report_timestamp = report.stop_time
 
         self.availability_reports.append(report)
 
     def reports_by_status(self, available_bool):
-        return [report for report in self.availability_reports if report.up == available_bool]
+        return [
+            report
+            for report in self.availability_reports
+            if report.up == available_bool
+        ]
 
     def reports_by_start_time(self):
         return sorted(self.availability_reports, key=lambda p: p.start_time)
 
     def __str__(self):
-        return f'Charger: {self.id}\n\t\t\tassigned to Station {self.station_id}\n\t\t\t availability_reports: {self.availability_reports}'
+        return f"Charger: {self.id}\n\t\t\tassigned to Station {self.station_id}\n\t\t\t availability_reports: {self.availability_reports}"
 
     def __repr__(self):
         return self.__str__()
 
+
 class AvailabilityReport:
+    instances = {}
 
-  instances = {}
+    def __init__(self, charger_id, start_time, stop_time, up):
+        self.charger_id = charger_id
+        self.start_time = start_time
+        self.stop_time = stop_time
+        self.up = up
 
-  def __init__(self, charger_id, start_time, stop_time, up):
+        self.id = (charger_id, start_time)
 
-    self.charger_id = charger_id
-    self.start_time = start_time
-    self.stop_time = stop_time
-    self.up = up
+    def duration(self):
+        return self.stop_time - self.start_time
 
-    self.id = (charger_id, start_time)
+    @property
+    def charger_id(self):
+        return self._charger_id
 
-  def duration(self):
-      return self.stop_time - self.start_time
+    @charger_id.setter
+    def charger_id(self, charger_id):
+        self._charger_id = charger_id
 
-  @property
-  def charger_id(self):
-      return self._charger_id
+    @property
+    def id(self):
+        return self._id
 
-  @charger_id.setter
-  def charger_id(self, charger_id):
-      self._charger_id = charger_id
+    @id.setter
+    def id(self, args):
+        self._id = f"{args[0]}{args[1]}"
 
-  @property
-  def id(self):
-      return self._id
+    def __str__(self):
+        return f"Report: Charger: {self.charger_id}, Start: {self.start_time}, Stop: {self.stop_time}, Up: {self.up}\n"
 
-  @id.setter
-  def id(self, args):
-      self._id = f"{args[0]}{args[1]}"
+    def __repr__(self):
+        return self.__str__()
 
-  def __str__(self):
-      return f'Report: Charger: {self.charger_id}, Start: {self.start_time}, Stop: {self.stop_time}, Up: {self.up}\n'
+    def __lt__(self, other):
+        return self.start_time < other.start_time
 
-  def __repr__(self):
-      return self.__str__()
-
-  def __lt__(self, other):
-      return self.start_time < other.start_time
 
 class Station:
     instances = {}
 
     def __init__(self, id):
-        #TODO - validate ID against prompt
+        # TODO - validate ID against prompt
 
         if id in self.__class__.instances:
-            raise sys.exit(f'Error: Duplicate station ID "{id}" detected, please check inputs')
+            raise sys.exit(
+                f'Error: Duplicate station ID "{id}" detected, please check inputs'
+            )
         self.__class__.instances[id] = self
 
         self.id = id
@@ -151,7 +164,7 @@ class Station:
 
     @classmethod
     def get(cls, station_id):
-        #todo - validate stationID
+        # todo - validate stationID
         if station_id not in __class__.instances:
             sys.exit(f'Error: Station "{station_id}" not found')
 
@@ -163,10 +176,11 @@ class Station:
 
     @property
     def id(self):
-      return self._id
+        return self._id
+
     @id.setter
     def id(self, id):
-      self._id = id
+        self._id = id
 
     @property
     def chargers(self):
@@ -181,69 +195,70 @@ class Station:
 
     def __str__(self):
         charger_ids = list(self.chargers.keys())
-        return f'Station ID: {self.id}\n\t\t\t\t Chargers: {charger_ids}\n\t\t\t\t\tFirst timestamp: {self.first_report_timestamp}\t\t Last timestamp:{self.last_report_timestamp}\n'
+        return f"Station ID: {self.id}\n\t\t\t\t Chargers: {charger_ids}\n\t\t\t\t\tFirst timestamp: {self.first_report_timestamp}\t\t Last timestamp:{self.last_report_timestamp}\n"
 
     def __repr__(self):
         return self.__str__()
 
+
 class Report:
     def generate(file_path):
-      station_data, charger_report_data = __class__.extract_data(file_path)
-      __class__.populate_stations(station_data)
-      __class__.populate_charger_reports(charger_report_data)
-      __class__.print_to_std_out(__class__.summarize_uptime())
+        station_data, charger_report_data = __class__.extract_data(file_path)
+        __class__.populate_stations(station_data)
+        __class__.populate_charger_reports(charger_report_data)
+        __class__.print_to_std_out(__class__.summarize_uptime())
 
     def extract_data(file_path):
-      stations = []
-      charger_availability = []
+        stations = []
+        charger_availability = []
 
-      # Read the file
-      with open(file_path, 'r') as file:
-          lines = file.readlines()
+        # Read the file
+        with open(file_path, "r") as file:
+            lines = file.readlines()
 
-      # Track current section
-      current_section = None
+        # Track current section
+        current_section = None
 
-      # Process each line
-      for line in lines:
-          line = line.strip()
+        # Process each line
+        for line in lines:
+            line = line.strip()
 
-          if len(line) == 0:
-              continue
+            if len(line) == 0:
+                continue
 
-          if line.startswith("[") and line.endswith("]"):
-              current_section = line.strip("[]")
-              continue
+            if line.startswith("[") and line.endswith("]"):
+                current_section = line.strip("[]")
+                continue
 
-          if current_section == "Stations":
-              # Parse stations section
-              parts = line.split()
-              station_id = int(parts[0])
-              connected_stations = tuple(map(int, parts[1:]))
-              stations.append((station_id, *connected_stations))
+            if current_section == "Stations":
+                # Parse stations section
+                parts = line.split()
+                station_id = int(parts[0])
+                connected_stations = tuple(map(int, parts[1:]))
+                stations.append((station_id, *connected_stations))
 
-          elif current_section == "Charger Availability Reports":
-              # Parse charger availability reports section
-              parts = line.split()
-              station_id = int(parts[0])
-              start = int(parts[1])
-              end = int(parts[2])
-              available = parts[3].lower() == 'true'
-              charger_availability.append((station_id, start, end, available))
-      return stations, charger_availability
+            elif current_section == "Charger Availability Reports":
+                # Parse charger availability reports section
+                parts = line.split()
+                station_id = int(parts[0])
+                start = int(parts[1])
+                end = int(parts[2])
+                available = parts[3].lower() == "true"
+                charger_availability.append((station_id, start, end, available))
+        return stations, charger_availability
 
     def populate_stations(station_data):
-      for line in station_data:
-          station_id = line[0]
-          chargers = line[1:] # TODO test against stations with no assigned chargers
+        for line in station_data:
+            station_id = line[0]
+            chargers = line[1:]  # TODO test against stations with no assigned chargers
 
-          new_station = Station(station_id)
+            new_station = Station(station_id)
 
-          # check for station uniqueness
-          # redundant with erroring in station initialization
-          for charger_id in chargers:
-              new_charger = Charger(charger_id, new_station.id)
-              new_station.add_charger(new_charger)
+            # check for station uniqueness
+            # redundant with erroring in station initialization
+            for charger_id in chargers:
+                new_charger = Charger(charger_id, new_station.id)
+                new_station.add_charger(new_charger)
 
     def populate_charger_reports(report_data):
         for line in report_data:
@@ -251,15 +266,12 @@ class Report:
 
             charger = Charger.get(charger_id)
             charger.add_report(start_time, end_time, up)
-            new_report = AvailabilityReport(charger_id, start_time, end_time, up)
-            # associated_station = Station.get(Charger.get(charger_id).station_id) # should be class method for accessing Station and Charger instances
-            # associated_station.add_report(new_report)
 
     def print_to_std_out(data):
         print(data)
         for station_id, percent in data:
             floored_percent = math.floor(percent * 100)
-            print(f'{str(station_id)} {floored_percent}')
+            print(f"{str(station_id)} {floored_percent}")
 
     def summarize_uptime():
         report_data = []
@@ -275,9 +287,15 @@ class Report:
 
             for charger in station_chargers:
                 # update station timestamps against the charger timestamps
-                if first_time_stamp is None or charger.first_report_timestamp < first_time_stamp:
+                if (
+                    first_time_stamp is None
+                    or charger.first_report_timestamp < first_time_stamp
+                ):
                     first_time_stamp = charger.first_report_timestamp
-                if last_time_stamp is None or charger.last_report_timestamp > last_time_stamp:
+                if (
+                    last_time_stamp is None
+                    or charger.last_report_timestamp > last_time_stamp
+                ):
                     last_time_stamp = charger.last_report_timestamp
 
                 # perform up time calculations on only up_time reports
@@ -286,7 +304,7 @@ class Report:
             up_time, down_time = __class__.calculate_uptime(station_reports)
             total_reporting_duration = last_time_stamp - first_time_stamp
 
-            print(f'uptime : ', up_time, f'\tdown_time {down_time}\n')
+            print("uptime : ", up_time, f"\tdown_time {down_time}\n")
 
             up_time_to_total_time = up_time / total_reporting_duration
 
@@ -347,10 +365,9 @@ def main():
 
     Report.generate(file_path)
 
+
 if __name__ == "__main__":
     main()
-
-
 
 
 # def ingest_report(file_path):
@@ -534,6 +551,3 @@ Validations skipped
 
 
 """
-
-
-
