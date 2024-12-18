@@ -1,5 +1,12 @@
 # charger_reports_cli
 
+
+Use - from inside ./code
+```
+python main.py ./relative/path.txt
+```
+
+
 Initial
 
 Find Station Uptime
@@ -20,8 +27,8 @@ Charger mapping
     charger : {
       id: int,
       assigned station: int,
-      start time: int,
-      end time: int,
+      global start time: int,
+      global end time: int,
       accounted run time: int,
       accounted down time: bool
       entries: [sorted tuples?] (don't sort during stream processing, sort if error processing)
