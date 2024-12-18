@@ -1,0 +1,5 @@
+[Stations]
+0 A
+
+[Charger Availability Reports]
+0 30 40 true
