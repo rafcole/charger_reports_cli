@@ -12,7 +12,10 @@ class Charger:
 
         self.id = id
         self.station_id = station_id
-        self.availabilityReports = []
+        self.availability_reports = []
+
+        self.first_report_timestamp = None
+        self.last_report_timestamp = None
 
     @classmethod
     def get(cls, charger_id):
@@ -38,11 +41,50 @@ class Charger:
     def station_id(self, station_id):
         self._station_id = station_id
 
-    def add_report(self, report):
-        self.availabilityReports.append(report)
+    @property
+    def first_report_timestamp(self):
+        return self._first_report_timestamp
+    @first_report_timestamp.setter
+    def first_report_timestamp(self, nano):
+        self._first_report_timestamp = nano
+
+    @property
+    def last_report_timestamp(self):
+        return self._last_report_timestamp
+    @last_report_timestamp.setter
+    def last_report_timestamp(self, nano):
+        self._last_report_timestamp = nano
+
+    @property
+    def duration(self):
+        return self.last_report_timestamp - self.first_report_timestamp
+
+    @property
+    def availability_reports(self):
+        return self._availability_reports
+
+    @availability_reports.setter
+    def availability_reports(self, data):
+        self._availability_reports = data
+
+    def add_report(self, start_time, end_time, up):
+        report = AvailabilityReport(self.id, start_time, end_time, up)
+
+        if self.first_report_timestamp is None or report.start_time < self.first_report_timestamp:
+            self.first_report_timestamp = report.start_time
+        if self.last_report_timestamp is None or report.stop_time > self.last_report_timestamp:
+            self.last_report_timestamp = report.stop_time
+
+        self.availability_reports.append(report)
+
+    def reports_by_status(self, available_bool):
+        return [report for report in self.availability_reports if report.up == available_bool]
+
+    def reports_by_start_time(self):
+        return sorted(self.availability_reports, key=lambda p: p.start_time)
 
     def __str__(self):
-        return f'Charger: {self.id}\n\t\t\tassigned to Station {self.station_id}\n\t\t\t AvailabilityReports: {self.availabilityReports}'
+        return f'Charger: {self.id}\n\t\t\tassigned to Station {self.station_id}\n\t\t\t availability_reports: {self.availability_reports}'
 
     def __repr__(self):
         return self.__str__()
@@ -86,6 +128,9 @@ class AvailabilityReport:
   def __repr__(self):
       return self.__str__()
 
+  def __lt__(self, other):
+      return self.start_time < other.start_time
+
 
 class Station:
 
@@ -102,7 +147,8 @@ class Station:
         self.chargers = {}
         self.first_report_timestamp = None
         self.last_report_timestamp = None
-        self.charger_up_reports = [] # feels bad, not sure station should know about it
+        # self.charger_up_reports = [] # feels bad, not sure station should know about it
+        self.all_reports = []
 
     @classmethod
     def get(cls, station_id):
@@ -131,37 +177,37 @@ class Station:
     def chargers(self, data):
         self._chargers = data
 
-
-    def add_report(self, report):
-        if self.first_report_timestamp is None or report.start_time < self.first_report_timestamp:
-            self.first_report_timestamp = report.start_time
-        if self.last_report_timestamp is None or report.stop_time > self.last_report_timestamp:
-            self.last_report_timestamp = report.stop_time
-
-        if report.up:
-            self.charger_up_reports.append(report)
-
-
-    @property
-    def first_report_timestamp(self):
-        return self._first_report_timestamp
-    @first_report_timestamp.setter
-    def first_report_timestamp(self, nano):
-        self._first_report_timestamp = nano
-
-    @property
-    def last_report_timestamp(self):
-        return self._last_report_timestamp
-    @last_report_timestamp.setter
-    def last_report_timestamp(self, nano):
-        self._last_report_timestamp = nano
-
-    @property
-    def duration(self):
-        return self.last_report_timestamp - self.first_report_timestamp
-
     def add_charger(self, charger):
         self.chargers[charger.id] = charger
+
+
+    # def add_report(self, report):
+    #     if self.first_report_timestamp is None or report.start_time < self.first_report_timestamp:
+    #         self.first_report_timestamp = report.start_time
+    #     if self.last_report_timestamp is None or report.stop_time > self.last_report_timestamp:
+    #         self.last_report_timestamp = report.stop_time
+
+    #     if report.up:
+    #         self.charger_up_reports.append(report)
+
+
+    # @property
+    # def first_report_timestamp(self):
+    #     return self._first_report_timestamp
+    # @first_report_timestamp.setter
+    # def first_report_timestamp(self, nano):
+    #     self._first_report_timestamp = nano
+
+    # @property
+    # def last_report_timestamp(self):
+    #     return self._last_report_timestamp
+    # @last_report_timestamp.setter
+    # def last_report_timestamp(self, nano):
+    #     self._last_report_timestamp = nano
+
+    # @property
+    # def duration(self):
+    #     return self.last_report_timestamp - self.first_report_timestamp
 
     def __str__(self):
         charger_ids = list(self.chargers.keys())
@@ -232,7 +278,6 @@ def extract_data(file_path):
             charger_availability.append((station_id, start, end, available))
     return stations, charger_availability
 
-
 def populate_stations(station_data):
   for line in station_data:
       station_id = line[0]
@@ -250,9 +295,11 @@ def populate_charger_reports(report_data):
     for line in report_data:
         charger_id, start_time, end_time, up = line
 
+        charger = Charger.get(charger_id)
+        charger.add_report(start_time, end_time, up)
         new_report = AvailabilityReport(charger_id, start_time, end_time, up)
-        associated_station = Station.get(Charger.get(charger_id).station_id) # should be class method for accessing Station and Charger instances
-        associated_station.add_report(new_report)
+        # associated_station = Station.get(Charger.get(charger_id).station_id) # should be class method for accessing Station and Charger instances
+        # associated_station.add_report(new_report)
 
 
 def summarize_uptime(): # feels off to do this on all stations
@@ -260,22 +307,66 @@ def summarize_uptime(): # feels off to do this on all stations
 
     for station_id in sorted_station_ids:
         current_station = Station.get(station_id)
-        print(Station.get(station_id))
         # how we get the charger_up reports is debateable
 
-        up_time_reports = current_station.charger_up_reports
+        station_chargers = list(current_station.chargers.values())
 
-        sorted_report = sorted(up_time_reports, key=lambda p: p.start_time)
+        station_reports = []
+
+        first_time_stamp = None
+        last_time_stamp = None
+
+        # calculate_uptime(station_chargers)
+
+        # up_time_reports = current_station.charger_up_reports
+        for charger in station_chargers:
+            # update timestamps from ALL reports to get total duration later
+            if first_time_stamp is None or charger.first_report_timestamp < first_time_stamp:
+                first_time_stamp = charger.first_report_timestamp
+            if last_time_stamp is None or charger.last_report_timestamp > last_time_stamp:
+                last_time_stamp = charger.last_report_timestamp
+
+            # perform up time calculations on only up_time reports
+            station_reports.extend(charger.reports_by_status(available_bool=True))
+            print(station_reports)
+
+
+        up_time, down_time = calculate_uptime(station_reports)
+
+        total_reporting_duration = last_time_stamp - first_time_stamp
+
+        print(f'uptime : ', up_time, f'\tdown_time {down_time}\n')
+
+        up_time_to_total_time = up_time / total_reporting_duration
+
+        print(up_time_to_total_time)
+
+        # For the current station
+        #   Collect all charger reports in a bucket []
+
+        #   Get all chargers of the current station
+        #     Get all reports from the current charger
+        #       Add to station_reports bucket
+        # Sort reports
+        # Accum uptime
+        # Calculate min and max timestamps
+
+        # sorted_report = sorted(up_time_reports, key=lambda p: p.start_time)
         # print(sorted_report)
-        print('merge_uptime output : ', merge_uptime(sorted_report))
+        # print('merge_uptime output : ', merge_uptime(sorted_report))
 
-def merge_uptime(reports_list):
+
+
+# kinda dumb name
+def calculate_uptime(reports_list):
     if not reports_list:
-        return 0, []
+        return 0, 0
+
+    reports_list = sorted(reports_list)
 
     merged = []
     up_time_total = 0
-    down_time_total = 0
+    unaccounted_time_total = 0
 
     merged_start, merged_end = reports_list[0].start_time, reports_list[0].stop_time
 
@@ -284,7 +375,7 @@ def merge_uptime(reports_list):
         current_end = report.stop_time
 
         if current_start > merged_end:  # Gap detected
-            down_time_total += current_end - merged_end
+            unaccounted_time_total += current_start - merged_end
             merged.append((merged_start, merged_end))
             up_time_total += merged_end - merged_start
             merged_start, merged_end = current_start, current_end
@@ -295,7 +386,7 @@ def merge_uptime(reports_list):
     merged.append((merged_start, merged_end))
     up_time_total += merged_end - merged_start
 
-    return up_time_total, down_time_total
+    return up_time_total, unaccounted_time_total
 
     """
     Get station keys
@@ -385,7 +476,15 @@ summarize_uptime()
 
 """
 
+collision reporting
+  The use of combo id for reports (chargerid + starttime) is meant to detect duplicate entries
+  Overlapping reports from the same charger are not directly solved for
+    This would add O(m) (where m is the number of reports to a given charger) to the processing
+    of each report
+    On a large dataset this check could be swapped to a computational check - has any charger reported more time than is possible given it's minimum start time and maximum end time? This would not catch all instances
 
+
+This system could be optimized for stream processing. Greater attention would be paid to maintaining rolling averages and creating snapshots. The program as written is more oriented towards batch processing, as alluded to in the prompt.
 
 given an input file
 
