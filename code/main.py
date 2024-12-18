@@ -1,6 +1,8 @@
 import re
 import pprint
 import sys
+import math
+import os
 
 class Charger:
     instances = {}
@@ -89,7 +91,6 @@ class Charger:
     def __repr__(self):
         return self.__str__()
 
-
 class AvailabilityReport:
 
   instances = {}
@@ -131,9 +132,7 @@ class AvailabilityReport:
   def __lt__(self, other):
       return self.start_time < other.start_time
 
-
 class Station:
-
     instances = {}
 
     def __init__(self, id):
@@ -180,35 +179,6 @@ class Station:
     def add_charger(self, charger):
         self.chargers[charger.id] = charger
 
-
-    # def add_report(self, report):
-    #     if self.first_report_timestamp is None or report.start_time < self.first_report_timestamp:
-    #         self.first_report_timestamp = report.start_time
-    #     if self.last_report_timestamp is None or report.stop_time > self.last_report_timestamp:
-    #         self.last_report_timestamp = report.stop_time
-
-    #     if report.up:
-    #         self.charger_up_reports.append(report)
-
-
-    # @property
-    # def first_report_timestamp(self):
-    #     return self._first_report_timestamp
-    # @first_report_timestamp.setter
-    # def first_report_timestamp(self, nano):
-    #     self._first_report_timestamp = nano
-
-    # @property
-    # def last_report_timestamp(self):
-    #     return self._last_report_timestamp
-    # @last_report_timestamp.setter
-    # def last_report_timestamp(self, nano):
-    #     self._last_report_timestamp = nano
-
-    # @property
-    # def duration(self):
-    #     return self.last_report_timestamp - self.first_report_timestamp
-
     def __str__(self):
         charger_ids = list(self.chargers.keys())
         return f'Station ID: {self.id}\n\t\t\t\t Chargers: {charger_ids}\n\t\t\t\t\tFirst timestamp: {self.first_report_timestamp}\t\t Last timestamp:{self.last_report_timestamp}\n'
@@ -216,196 +186,171 @@ class Station:
     def __repr__(self):
         return self.__str__()
 
-
 class Report:
-    def __init__(self):
-        self.stations = {}
-        self.downTime = 0.0
+    def generate(file_path):
+      station_data, charger_report_data = __class__.extract_data(file_path)
+      __class__.populate_stations(station_data)
+      __class__.populate_charger_reports(charger_report_data)
+      __class__.print_to_std_out(__class__.summarize_uptime())
 
-    @property
-    def stations(self):
-        return self._stations
+    def extract_data(file_path):
+      stations = []
+      charger_availability = []
 
-    @stations.setter
-    def stations(self, arrayOfStations):
-        self._stations = arrayOfStations
+      # Read the file
+      with open(file_path, 'r') as file:
+          lines = file.readlines()
 
-    def addStation(self, station_id):
-        self.stations[station_id] = Station(station_id)
+      # Track current section
+      current_section = None
 
-        return self._stations[station_id]
+      # Process each line
+      for line in lines:
+          line = line.strip()
 
-#TODO - filepath is cli arg
+          if len(line) == 0:
+              continue
 
-file_path = '../coding-challenge-charger-uptime-main/input_1.txt'
+          if line.startswith("[") and line.endswith("]"):
+              current_section = line.strip("[]")
+              continue
 
-def extract_data(file_path):
-    stations = []
-    charger_availability = []
+          if current_section == "Stations":
+              # Parse stations section
+              parts = line.split()
+              station_id = int(parts[0])
+              connected_stations = tuple(map(int, parts[1:]))
+              stations.append((station_id, *connected_stations))
 
-    # Read the file
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
+          elif current_section == "Charger Availability Reports":
+              # Parse charger availability reports section
+              parts = line.split()
+              station_id = int(parts[0])
+              start = int(parts[1])
+              end = int(parts[2])
+              available = parts[3].lower() == 'true'
+              charger_availability.append((station_id, start, end, available))
+      return stations, charger_availability
 
-    # Track current section
-    current_section = None
+    def populate_stations(station_data):
+      for line in station_data:
+          station_id = line[0]
+          chargers = line[1:] # TODO test against stations with no assigned chargers
 
-    # Process each line
-    for line in lines:
-        line = line.strip()
+          new_station = Station(station_id)
 
-        if len(line) == 0:
-            continue
+          # check for station uniqueness
+          # redundant with erroring in station initialization
+          for charger_id in chargers:
+              new_charger = Charger(charger_id, new_station.id)
+              new_station.add_charger(new_charger)
 
-        if line.startswith("[") and line.endswith("]"):
-            current_section = line.strip("[]")
-            continue
+    def populate_charger_reports(report_data):
+        for line in report_data:
+            charger_id, start_time, end_time, up = line
 
-        if current_section == "Stations":
-            # Parse stations section
-            parts = line.split()
-            station_id = int(parts[0])
-            connected_stations = tuple(map(int, parts[1:]))
-            stations.append((station_id, *connected_stations))
+            charger = Charger.get(charger_id)
+            charger.add_report(start_time, end_time, up)
+            new_report = AvailabilityReport(charger_id, start_time, end_time, up)
+            # associated_station = Station.get(Charger.get(charger_id).station_id) # should be class method for accessing Station and Charger instances
+            # associated_station.add_report(new_report)
 
-        elif current_section == "Charger Availability Reports":
-            # Parse charger availability reports section
-            parts = line.split()
-            station_id = int(parts[0])
-            start = int(parts[1])
-            end = int(parts[2])
-            available = parts[3].lower() == 'true'
-            charger_availability.append((station_id, start, end, available))
-    return stations, charger_availability
+    def print_to_std_out(data):
+        print(data)
+        for station_id, percent in data:
+            floored_percent = math.floor(percent * 100)
+            print(f'{str(station_id)} {floored_percent}')
 
-def populate_stations(station_data):
-  for line in station_data:
-      station_id = line[0]
-      chargers = line[1:] # TODO test against stations with no assigned chargers
+    def summarize_uptime():
+        report_data = []
+        sorted_station_ids = sorted(Station.get_all().keys())
 
-      new_station = Station(station_id)
+        for station_id in sorted_station_ids:
+            current_station = Station.get(station_id)
+            station_chargers = list(current_station.chargers.values())
+            station_reports = []
 
-      # check for station uniqueness
-      # redundant with erroring in station initialization
-      for charger_id in chargers:
-          new_charger = Charger(charger_id, new_station.id)
-          new_station.add_charger(new_charger)
+            first_time_stamp = None
+            last_time_stamp = None
 
-def populate_charger_reports(report_data):
-    for line in report_data:
-        charger_id, start_time, end_time, up = line
+            for charger in station_chargers:
+                # update station timestamps against the charger timestamps
+                if first_time_stamp is None or charger.first_report_timestamp < first_time_stamp:
+                    first_time_stamp = charger.first_report_timestamp
+                if last_time_stamp is None or charger.last_report_timestamp > last_time_stamp:
+                    last_time_stamp = charger.last_report_timestamp
 
-        charger = Charger.get(charger_id)
-        charger.add_report(start_time, end_time, up)
-        new_report = AvailabilityReport(charger_id, start_time, end_time, up)
-        # associated_station = Station.get(Charger.get(charger_id).station_id) # should be class method for accessing Station and Charger instances
-        # associated_station.add_report(new_report)
+                # perform up time calculations on only up_time reports
+                station_reports.extend(charger.reports_by_status(available_bool=True))
 
+            up_time, down_time = __class__.calculate_uptime(station_reports)
+            total_reporting_duration = last_time_stamp - first_time_stamp
 
-def summarize_uptime(): # feels off to do this on all stations
-    sorted_station_ids = sorted(Station.get_all().keys())
+            print(f'uptime : ', up_time, f'\tdown_time {down_time}\n')
 
-    for station_id in sorted_station_ids:
-        current_station = Station.get(station_id)
-        # how we get the charger_up reports is debateable
+            up_time_to_total_time = up_time / total_reporting_duration
 
-        station_chargers = list(current_station.chargers.values())
+            print(up_time_to_total_time)
+            report_data.append((station_id, up_time_to_total_time))
+        return report_data
 
-        station_reports = []
+    def calculate_uptime(reports_list):
+        if not reports_list:
+            return 0, 0
 
-        first_time_stamp = None
-        last_time_stamp = None
+        reports_list = sorted(reports_list)
 
-        # calculate_uptime(station_chargers)
+        merged = []
+        up_time_total = 0
+        unaccounted_time_total = 0
 
-        # up_time_reports = current_station.charger_up_reports
-        for charger in station_chargers:
-            # update timestamps from ALL reports to get total duration later
-            if first_time_stamp is None or charger.first_report_timestamp < first_time_stamp:
-                first_time_stamp = charger.first_report_timestamp
-            if last_time_stamp is None or charger.last_report_timestamp > last_time_stamp:
-                last_time_stamp = charger.last_report_timestamp
+        merged_start, merged_end = reports_list[0].start_time, reports_list[0].stop_time
 
-            # perform up time calculations on only up_time reports
-            station_reports.extend(charger.reports_by_status(available_bool=True))
-            print(station_reports)
+        for report in reports_list[1:]:
+            current_start = report.start_time
+            current_end = report.stop_time
 
+            if current_start > merged_end:  # Gap detected
+                unaccounted_time_total += current_start - merged_end
+                merged.append((merged_start, merged_end))
+                up_time_total += merged_end - merged_start
+                merged_start, merged_end = current_start, current_end
+            else:  # Merge overlapping/adjacent ranges
+                merged_end = max(merged_end, current_end)
 
-        up_time, down_time = calculate_uptime(station_reports)
+        # Add the last range
+        merged.append((merged_start, merged_end))
+        up_time_total += merged_end - merged_start
 
-        total_reporting_duration = last_time_stamp - first_time_stamp
+        return up_time_total, unaccounted_time_total
 
-        print(f'uptime : ', up_time, f'\tdown_time {down_time}\n')
+        """
+        Get station keys
+        Sort ascending
 
-        up_time_to_total_time = up_time / total_reporting_duration
-
-        print(up_time_to_total_time)
-
-        # For the current station
-        #   Collect all charger reports in a bucket []
-
-        #   Get all chargers of the current station
-        #     Get all reports from the current charger
-        #       Add to station_reports bucket
-        # Sort reports
-        # Accum uptime
-        # Calculate min and max timestamps
-
-        # sorted_report = sorted(up_time_reports, key=lambda p: p.start_time)
-        # print(sorted_report)
-        # print('merge_uptime output : ', merge_uptime(sorted_report))
-
-
-
-# kinda dumb name
-def calculate_uptime(reports_list):
-    if not reports_list:
-        return 0, 0
-
-    reports_list = sorted(reports_list)
-
-    merged = []
-    up_time_total = 0
-    unaccounted_time_total = 0
-
-    merged_start, merged_end = reports_list[0].start_time, reports_list[0].stop_time
-
-    for report in reports_list[1:]:
-        current_start = report.start_time
-        current_end = report.stop_time
-
-        if current_start > merged_end:  # Gap detected
-            unaccounted_time_total += current_start - merged_end
-            merged.append((merged_start, merged_end))
-            up_time_total += merged_end - merged_start
-            merged_start, merged_end = current_start, current_end
-        else:  # Merge overlapping/adjacent ranges
-            merged_end = max(merged_end, current_end)
-
-    # Add the last range
-    merged.append((merged_start, merged_end))
-    up_time_total += merged_end - merged_start
-
-    return up_time_total, unaccounted_time_total
-
-    """
-    Get station keys
-    Sort ascending
-
-    Iterate over keys/stations
-      Calculate up time HELPER TODO
-      Print to screen
-    """
+        Iterate over keys/stations
+          Calculate up time HELPER TODO
+          Print to screen
+        """
 
 
+def main():
+    if len(sys.argv) != 2:
+        print("Usage: python main.py <file_path>")
+        sys.exit(1)
+
+    file_path = sys.argv[1]
+
+    if not os.path.isfile(file_path):
+        print(f"Error: File '{file_path}' not found.")
+        sys.exit(1)
+
+    Report.generate(file_path)
+
+if __name__ == "__main__":
+    main()
 
 
-station_data, charger_report_data = extract_data(file_path)
-
-
-populate_stations(station_data)
-populate_charger_reports(charger_report_data)
-summarize_uptime()
 
 
 # def ingest_report(file_path):
