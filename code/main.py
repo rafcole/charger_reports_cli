@@ -3,10 +3,47 @@ import math
 import os
 
 
+class ValidationUtils:
+    @classmethod
+    def is_usable_as_unsigned_32_bit_int(cls, value):
+        if type(value) is str:
+            if not value.isdigit():
+                return False
+            value = int(value)
+
+        if type(value) is int:
+            return 0 <= value <= 2**32 - 1
+
+        return False
+
+    @classmethod
+    def is_unsigned_64_bit_integer_as_str(cls, value):
+        if value.isdigit():
+            num = int(value)
+            if 0 <= num <= 2**64 - 1:
+                return True
+        return False
+
+    @classmethod
+    def is_bool(cls, value):
+        if type(value) is bool:
+            return True
+
+        if type(value) is str:
+            return {"True", "true", "TRUE", "False", "false", "FALSE"}.includes(input)
+        # todo
+        return False
+
+
 class Charger:
     instances = {}
 
     def __init__(self, id, station_id):
+        if not __class__.is_valid_id(id):
+            raise sys.exit(f'ERROR: invalid charger ID "{id}"')
+
+        id = int(id)
+
         if id in self.__class__.instances:
             raise sys.exit(f'Error: A charger with the ID "{id}" already exists')
         self.__class__.instances[id] = self
@@ -19,12 +56,16 @@ class Charger:
         self.last_report_timestamp = None
 
     @classmethod
+    def is_valid_id(cls, id):
+        return ValidationUtils.is_usable_as_unsigned_32_bit_int(id)
+
+    @classmethod
     def get(cls, charger_id):
         # todo - validate stationID
-        if charger_id not in __class__.instances:
-            sys.exit(f'Error: Charger "{charger_id}" not found')
+        if charger_id not in cls.instances:
+            raise Exception(f'Error: Charger "{charger_id}" not found')
 
-        return __class__.instances[charger_id]
+        return cls.instances[charger_id]
 
     @property
     def id(self):
@@ -147,32 +188,38 @@ class Station:
     instances = {}
 
     def __init__(self, id):
-        # TODO - validate ID against prompt
+        if not __class__.is_valid_id(id):
+            raise sys.exit(f'ERROR: invalid station ID "{id}"')
+
+        id = int(id)
 
         if id in self.__class__.instances:
             raise sys.exit(
                 f'Error: Duplicate station ID "{id}" detected, please check inputs'
             )
-        self.__class__.instances[id] = self
 
+        self.__class__.instances[id] = self
         self.id = id
         self.chargers = {}
         self.first_report_timestamp = None
         self.last_report_timestamp = None
-        # self.charger_up_reports = [] # feels bad, not sure station should know about it
         self.all_reports = []
+
+    @classmethod
+    def is_valid_id(cls, value):
+        return ValidationUtils.is_usable_as_unsigned_32_bit_int(value)
 
     @classmethod
     def get(cls, station_id):
         # todo - validate stationID
-        if station_id not in __class__.instances:
+        if station_id not in cls.instances:
             sys.exit(f'Error: Station "{station_id}" not found')
 
-        return __class__.instances[station_id]
+        return cls.instances[station_id]
 
     @classmethod
     def get_all(cls):
-        return __class__.instances
+        return cls.instances
 
     @property
     def id(self):
@@ -202,24 +249,30 @@ class Station:
 
 
 class Report:
-    def generate(file_path):
-        station_data, charger_report_data = __class__.extract_data(file_path)
-        __class__.populate_stations(station_data)
-        __class__.populate_charger_reports(charger_report_data)
-        __class__.print_to_std_out(__class__.summarize_uptime())
+    @classmethod
+    def generate(cls, file_path):
+        station_data, charger_report_data = cls.extract_data(file_path)
+        if len(station_data) == 0:
+            print("ERROR: No stations in dataset")
+            sys.exit(1)
+        if len(charger_report_data) == 0:
+            print("ERROR: No availability reports in dataset")
+            sys.exit(1)
 
-    def extract_data(file_path):
+        cls.populate_stations(station_data)
+        cls.populate_charger_reports(charger_report_data)
+        cls.print_to_std_out(cls.summarize_uptime())
+
+    @classmethod
+    def extract_data(cls, file_path):
         stations = []
         charger_availability = []
 
-        # Read the file
         with open(file_path, "r") as file:
             lines = file.readlines()
 
-        # Track current section
         current_section = None
 
-        # Process each line
         for line in lines:
             line = line.strip()
 
@@ -231,14 +284,11 @@ class Report:
                 continue
 
             if current_section == "Stations":
-                # Parse stations section
                 parts = line.split()
-                station_id = int(parts[0])
-                connected_stations = tuple(map(int, parts[1:]))
-                stations.append((station_id, *connected_stations))
+
+                stations.append(parts)
 
             elif current_section == "Charger Availability Reports":
-                # Parse charger availability reports section
                 parts = line.split()
                 station_id = int(parts[0])
                 start = int(parts[1])
@@ -247,7 +297,9 @@ class Report:
                 charger_availability.append((station_id, start, end, available))
         return stations, charger_availability
 
-    def populate_stations(station_data):
+    @classmethod
+    def populate_stations(cls, station_data):
+        print(station_data)
         for line in station_data:
             station_id = line[0]
             chargers = line[1:]  # TODO test against stations with no assigned chargers
@@ -259,33 +311,54 @@ class Report:
             for charger_id in chargers:
                 new_charger = Charger(charger_id, new_station.id)
                 new_station.add_charger(new_charger)
+        if len(Charger.instances) == 0:
+            print("ERROR: No chargers in dataset")
+            sys.exit(1)
 
-    def populate_charger_reports(report_data):
+    @classmethod
+    def populate_charger_reports(cls, report_data):
         for line in report_data:
             charger_id, start_time, end_time, up = line
+            charger = None
+            try:
+                charger = Charger.get(charger_id)
+            except Exception as e:
+                print(
+                    f"{e}\nError: Charger {charger_id} found in avaliability reports but not associated with a station"
+                )
+                sys.exit(1)
 
-            charger = Charger.get(charger_id)
             charger.add_report(start_time, end_time, up)
 
-    def print_to_std_out(data):
-        print(data)
+    @classmethod
+    def print_to_std_out(cls, data):
         for station_id, percent in data:
             floored_percent = math.floor(percent * 100)
             print(f"{str(station_id)} {floored_percent}")
 
-    def summarize_uptime():
+    @classmethod
+    def summarize_uptime(cls):
         report_data = []
         sorted_station_ids = sorted(Station.get_all().keys())
 
         for station_id in sorted_station_ids:
             current_station = Station.get(station_id)
             station_chargers = list(current_station.chargers.values())
+
+            # skip stations with no chargers
+            if len(station_chargers) == 0:
+                continue
+
             station_reports = []
 
             first_time_stamp = None
             last_time_stamp = None
 
             for charger in station_chargers:
+                # skip chargers with no reports
+                if len(charger.availability_reports) == 0:
+                    continue
+
                 # update station timestamps against the charger timestamps
                 if (
                     first_time_stamp is None
@@ -301,18 +374,16 @@ class Report:
                 # perform up time calculations on only up_time reports
                 station_reports.extend(charger.reports_by_status(available_bool=True))
 
-            up_time, down_time = __class__.calculate_uptime(station_reports)
+            up_time, down_time = cls.calculate_uptime(station_reports)
             total_reporting_duration = last_time_stamp - first_time_stamp
-
-            print("uptime : ", up_time, f"\tdown_time {down_time}\n")
 
             up_time_to_total_time = up_time / total_reporting_duration
 
-            print(up_time_to_total_time)
             report_data.append((station_id, up_time_to_total_time))
         return report_data
 
-    def calculate_uptime(reports_list):
+    @classmethod
+    def calculate_uptime(cls, reports_list):
         if not reports_list:
             return 0, 0
 
@@ -370,58 +441,6 @@ if __name__ == "__main__":
     main()
 
 
-# def ingest_report(file_path):
-#   in_stations_section = False
-#   in_charger_reports = False
-
-#   with open(file_path, 'r') as file:
-#       for line in file:
-#           line = line.strip()
-
-#           # Check for section headers
-#           if line == "[Stations]":
-#               in_stations_section = True
-#               continue
-#           elif line == "[Charger Availability Reports]":
-#               continue
-#           elif len(line) == 0:
-#               in_stations_section = False
-#               continue
-
-#           # Create station, add chargers
-#           # TODO - allow duplicative charger entries
-#           if in_stations_section and line:
-#               line_data = line.split()
-#               station_id = line_data[0]
-#               current_station = Station(station_id)
-#               #all_stations[station_id] = current_station #now duplicative of Station.instances
-
-#               charger_ids = line_data[1:]
-
-#               for id in charger_ids:
-#                   new_charger = Charger(id, station_id)
-#                   # all_chargers[id] = new_charger
-#                   current_station.add_charger(new_charger)
-
-#           # parse reports
-#           else:
-#               report_entities = line.split()
-#               charger_id = report_entities[0]
-#               start_time = report_entities[1]
-#               stop_time = report_entities[2]
-#               up = report_entities[3]
-
-#               report = AvailabilityReport(charger_id, start_time, stop_time, up)
-
-#               parent_station = Station.instances[Charger.instances[charger_id].station_id]
-#               parent_station.add_report(report)
-
-
-#   return {
-#       'stations': Station.instances,
-#       'chargers': Charger.instances
-#       }
-
 # disjuncture in that report come in at the charger level (perhaps each charger has it's own 5g system)
 # but the station data is not associated
 # Cumulative up time reports are organized at the station level
@@ -437,6 +456,11 @@ if __name__ == "__main__":
 
 
 """
+Validation of inputs
+  Inpute are validated in the processing phase of the Report class. This creates a tight coupling between the
+
+
+
 
 collision reporting
   The use of combo id for reports (chargerid + starttime) is meant to detect duplicate entries
